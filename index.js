@@ -1,7 +1,7 @@
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 async function fetchAllData() {
-    console.log("📥 正在拉取全量数据 (X, Blogs, Podcasts)...");
+    console.log("📥 正在从 GitHub 拉取全量数据 (X, Blogs, Podcasts)...");
     const baseUrl = 'https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/';
     
     // 同时请求三个数据源
@@ -11,33 +11,42 @@ async function fetchAllData() {
         fetch(baseUrl + 'feed-podcasts.json').then(res => res.json())
     ]);
 
-    // 格式化 X 数据
-    const xItems = (xRes.x || []).slice(0, 15).map(item => ({
-        type: 'X (Twitter)',
-        author: item.name || item.handle,
-        content: item.text || item.content_text,
-        url: item.url
-    }));
+    // 1. 处理 X 数据 (修正嵌套结构：作者 -> tweets 数组)
+    const xItems = [];
+    if (xRes.x && Array.isArray(xRes.x)) {
+        xRes.x.forEach(builder => {
+            if (builder.tweets && Array.isArray(builder.tweets)) {
+                builder.tweets.forEach(tweet => {
+                    xItems.push({
+                        author: builder.name || builder.handle,
+                        content: tweet.text,
+                        url: tweet.url,
+                        time: tweet.createdAt
+                    });
+                });
+            }
+        });
+    }
+    // 按时间倒序排，取最新的 15 条
+    const finalX = xItems.sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 15);
 
-    // 格式化 博客数据 (Anthropic, Claude 等)
-    const blogItems = (blogRes.items || []).slice(0, 5).map(item => ({
-        type: 'Official Blog',
-        author: item.author?.name || 'AI Team',
+    // 2. 处理博客数据 (注意：字段名是 blogs)
+    const finalBlogs = (blogRes.blogs || []).slice(0, 5).map(item => ({
+        author: item.author || 'AI Team',
         title: item.title,
-        content: item.content_text || item.summary,
+        content: item.content_text || item.summary || "点击链接查看全文",
         url: item.url
     }));
 
-    // 格式化 播客数据
-    const podItems = (podRes.items || []).slice(0, 5).map(item => ({
-        type: 'Podcast',
+    // 3. 处理播客数据 (注意：字段名是 podcasts)
+    const finalPods = (podRes.podcasts || []).slice(0, 5).map(item => ({
         title: item.title,
-        content: item.summary || item.description,
+        content: item.summary || item.description || "包含最新技术讨论",
         url: item.url
     }));
 
-    console.log(`✅ 抓取完成: X(${xItems.length}), Blogs(${blogItems.length}), Podcasts(${podItems.length})`);
-    return { xItems, blogItems, podItems };
+    console.log(`✅ 抓取完成: X(${finalX.length}), Blogs(${finalBlogs.length}), Podcasts(${finalPods.length})`);
+    return { xItems: finalX, blogItems: finalBlogs, podItems: finalPods };
 }
 
 async function generateSummary(data) {
@@ -49,8 +58,7 @@ async function generateSummary(data) {
 
     console.log("🧠 正在调用 Gemini 生成全量精华简报...");
 
-    // 将所有内容拼接成给 AI 的上下文
-  // 在 generateSummary 函数内部修改拼接逻辑
+    // 严谨的数据拼接逻辑
     const xContent = xItems.length > 0 
         ? xItems.map(i => `- [推特] 作者: ${i.author}\n  内容: ${i.content}\n  原文链接: ${i.url}`).join('\n\n')
         : "（当前无推特更新数据）";
@@ -65,28 +73,22 @@ async function generateSummary(data) {
 
     const fullContext = `【数据来源清单】\n\n1. X/Twitter 动态：\n${xContent}\n\n2. 技术博客：\n${blogContent}\n\n3. 播客动态：\n${podContent}`;
 
-   const prompt = `你是一个专业的 AI 行业观察员，负责根据提供的【数据来源清单】生成一份极简且硬核的 HTML 邮件简报。
+    const prompt = `你是一个专业的 AI 行业观察员，负责根据提供的【数据来源清单】生成一份极简且硬核的 HTML 邮件简报。
 
-### 严格指令（必须遵守）：
-1. **禁止幻想**：如果某个板块下显示“（当前无数据）”，则在 HTML 中**完全隐藏（不要显示）**该板块。绝对禁止编造任何虚假内容、示例或占位符。
-2. **链接对齐**：每个总结条目的末尾，必须附带其对应的原始 [原文链接]。**禁止自行猜测或修改 URL**，必须直接使用清单中提供的完整链接。
-3. **内容深度**：不要逐条翻译。请将相关联的推文、博客或播客合并，提炼出核心的技术变动或行业趋势。
+### 严格指令：
+1. **禁止幻想**：如果某个板块显示“（当前无数据）”，则在 HTML 中**完全隐藏**该板块。严禁编造示例内容。
+2. **链接对齐**：每个条目末尾必须附带其对应的 [原文链接]。**必须直接使用提供的 URL，不要修改或缩短**，确保在 HTML 中使用 <a href="..."> 标签包裹。
+3. **内容提炼**：不要逐条翻译，请总结核心技术变动或行业趋势。
 
 ### HTML 结构要求：
-- **布局**：使用现代感强的内联 CSS。浅灰色背景 (#f6f8fa)，白色卡片式容器 (#ffffff)。
-- **板块**：
-    - 如果有推文，板块标题为：Builder 洞察 (X)
-    - 如果有博客，板块标题为：深度技术长文 (Blogs)
-    - 如果有播客，板块标题为：音频精华 (Podcasts)
-- **样式**：深灰色优雅字体 (#24292f)，蓝色可点击链接 (#0969da)，合理的卡片间距和边框圆角。
-
-### 输出限制：
-- **只输出纯 HTML 代码**，不要任何 Markdown 标记（如 \`\`\`html），不要包含任何解释性的文字或注释。
+- **布局**：使用现代感强的内联 CSS。背景 #f6f8fa，卡片 #ffffff。
+- **样式**：深灰色优雅字体 #24292f，蓝色可点击链接 #0969da，合理的间距。
+- **纯净输出**：只输出 HTML 代码，不要 Markdown 标记（如 \`\`\`html）。
 
 【数据来源清单如下】：
 ${fullContext}`;
 
-    // 使用你验证过可行的 Gemini 端点
+    // 使用你验证过可行的端点
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
     
     const response = await fetch(apiUrl, {
@@ -103,11 +105,12 @@ ${fullContext}`;
 
     const result = await response.json();
     let htmlContent = result.candidates[0].content.parts[0].text;
-    htmlContent = htmlContent.replace(/```html/g, '').replace(/```/g, '').trim();
     
-    const fs = require('fs');
-    fs.writeFileSync('digest.html', htmlContent);
-    console.log("✅ 全量 HTML 简报已生成至 digest.html");
+    // 彻底清理可能存在的 Markdown 标签
+    htmlContent = htmlContent.replace(/```html/gi, '').replace(/```/gi, '').trim();
+    
+    require('fs').writeFileSync('digest.html', htmlContent);
+    console.log("✅ 全量 HTML 简报已成功生成！");
 }
 
 async function main() {
