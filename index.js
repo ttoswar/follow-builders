@@ -11,7 +11,6 @@ async function fetchBuildersData() {
 
     const data = await response.json();
     
-    // 核心修复：根据真实 JSON 结构，数据存在 data.x 数组中
     if (data && data.x && Array.isArray(data.x)) {
         const itemsToProcess = data.x;
         if (itemsToProcess.length === 0) {
@@ -21,7 +20,7 @@ async function fetchBuildersData() {
         console.log(`✅ 成功获取 ${itemsToProcess.length} 条动态。`);
         return itemsToProcess.slice(0, 15); 
     } else {
-        throw new Error("无法在 JSON 中找到 'x' 数组，数据格式确实变了。");
+        throw new Error("无法在 JSON 中找到 'x' 数组。");
     }
 }
 
@@ -33,10 +32,8 @@ async function generateSummary(items) {
 
     console.log("🧠 正在生成排版精美的简报...");
     
-    // 核心修复：适配真实的字段名 name 和 text
     const contentText = items.map(item => {
         const authorName = item.name || item.handle || "未知作者";
-        // 尝试抓取正文，推特数据通常是 text 或 full_text
         const text = item.text || item.full_text || item.content_text || JSON.stringify(item);
         return `作者: ${authorName}\n内容: ${text}`;
     }).join('\n\n---\n\n');
@@ -46,7 +43,9 @@ async function generateSummary(items) {
 只输出纯 HTML 代码，不要任何 Markdown 标记或废话。
 内容如下：\n${contentText}`;
 
-const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${GEMINI_API_KEY}`;
+    // 终极修复：使用最基础、最稳定的 1.5 Flash 端点，去掉了 -latest 后缀
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    
     const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -54,10 +53,19 @@ const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1
     });
 
     if (!response.ok) {
+        // 关键增强：把 Google 服务器返回的真实错误信息抓取并打印出来
+        const errorText = await response.text();
+        console.error("❌ Gemini API 返回了详细的错误信息：", errorText);
         throw new Error(`Gemini API 请求失败，状态码: ${response.status}`);
     }
 
     const result = await response.json();
+    
+    if (!result.candidates || !result.candidates[0] || !result.candidates[0].content) {
+        console.error("❌ API 返回的数据结构异常：", JSON.stringify(result));
+        throw new Error("Gemini API 返回了成功状态码，但没有生成内容。");
+    }
+
     let htmlContent = result.candidates[0].content.parts[0].text;
     htmlContent = htmlContent.replace(/```html/g, '').replace(/```/g, '').trim();
     
