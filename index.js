@@ -50,22 +50,41 @@ async function generateSummary(data) {
     console.log("🧠 正在调用 Gemini 生成全量精华简报...");
 
     // 将所有内容拼接成给 AI 的上下文
-    const fullContext = [
-        ...xItems.map(i => `[X推文] 作者:${i.author} | 内容:${i.content} | 链接:${i.url}`),
-        ...blogItems.map(i => `[技术博客] 标题:${i.title} | 内容简述:${i.content} | 链接:${i.url}`),
-        ...podItems.map(i => `[顶级播客] 标题:${i.title} | 摘要:${i.content} | 链接:${i.url}`)
-    ].join('\n\n---\n\n');
+  // 在 generateSummary 函数内部修改拼接逻辑
+    const xContent = xItems.length > 0 
+        ? xItems.map(i => `- [推特] 作者: ${i.author}\n  内容: ${i.content}\n  原文链接: ${i.url}`).join('\n\n')
+        : "（当前无推特更新数据）";
 
-    const prompt = `你是一个专业的 AI 行业观察员。请阅读以下来自顶尖 AI Builder、技术博客和播客的动态，生成一份极简且硬核的 HTML 邮件简报。
+    const blogContent = blogItems.length > 0
+        ? blogItems.map(i => `- [博客] 标题: ${i.title}\n  作者: ${i.author}\n  简述: ${i.content}\n  原文链接: ${i.url}`).join('\n\n')
+        : "（当前无博客更新数据）";
 
-要求：
-1. **结构分明**：分为“Builder 观点 (X)”、“深度技术长文 (Blogs)”、“播客精华 (Podcasts)”三个板块。
-2. **提炼价值**：不要逐条翻译，而是提取出最值得关注的技术趋势、产品更新或深度洞察。
-3. **保留链接**：每个条目或板块末尾必须包含对应的[查看原文]超链接。
-4. **视觉风格**：使用现代感强的内联 CSS。卡片式布局、浅灰色背景、深色优雅文字、蓝色链接。
-5. **纯净输出**：只返回 HTML 代码，不要任何 Markdown 标记。
+    const podContent = podItems.length > 0
+        ? podItems.map(i => `- [播客] 标题: ${i.title}\n  摘要: ${i.content}\n  原文链接: ${i.url}`).join('\n\n')
+        : "（当前无播客更新数据）";
 
-内容原文如下：\n${fullContext}`;
+    const fullContext = `【数据来源清单】\n\n1. X/Twitter 动态：\n${xContent}\n\n2. 技术博客：\n${blogContent}\n\n3. 播客动态：\n${podContent}`;
+
+   const prompt = `你是一个专业的 AI 行业观察员，负责根据提供的【数据来源清单】生成一份极简且硬核的 HTML 邮件简报。
+
+### 严格指令（必须遵守）：
+1. **禁止幻想**：如果某个板块下显示“（当前无数据）”，则在 HTML 中**完全隐藏（不要显示）**该板块。绝对禁止编造任何虚假内容、示例或占位符。
+2. **链接对齐**：每个总结条目的末尾，必须附带其对应的原始 [原文链接]。**禁止自行猜测或修改 URL**，必须直接使用清单中提供的完整链接。
+3. **内容深度**：不要逐条翻译。请将相关联的推文、博客或播客合并，提炼出核心的技术变动或行业趋势。
+
+### HTML 结构要求：
+- **布局**：使用现代感强的内联 CSS。浅灰色背景 (#f6f8fa)，白色卡片式容器 (#ffffff)。
+- **板块**：
+    - 如果有推文，板块标题为：Builder 洞察 (X)
+    - 如果有博客，板块标题为：深度技术长文 (Blogs)
+    - 如果有播客，板块标题为：音频精华 (Podcasts)
+- **样式**：深灰色优雅字体 (#24292f)，蓝色可点击链接 (#0969da)，合理的卡片间距和边框圆角。
+
+### 输出限制：
+- **只输出纯 HTML 代码**，不要任何 Markdown 标记（如 \`\`\`html），不要包含任何解释性的文字或注释。
+
+【数据来源清单如下】：
+${fullContext}`;
 
     // 使用你验证过可行的 Gemini 端点
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
