@@ -122,6 +122,10 @@ ${fullContext}`;
     htmlContent = htmlContent.replace(/```html/gi, '').replace(/```/gi, '').trim();
     
     require('fs').writeFileSync('digest.html', htmlContent);
+    // 在原有的生成 html 代码下方加上：
+    const markdownContent = `# 今日 AI Builder 动态\n\n${fullContext}`;
+    fs.writeFileSync('digest.md', markdownContent);
+    console.log("✅ HTML与MD简报均已成功生成！");
     console.log("✅ 全量 HTML 简报已成功生成！");
 }
 
