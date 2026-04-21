@@ -2,11 +2,8 @@ name: Daily Email Digest
 
 on:
   schedule:
-    # 每天北京时间 10:00 运行 (对应 UTC 02:00)
-    # cron: '0 2 * * *'
-
-    # 每天北京时间 12:00 运行 (对应 UTC 04:00)
-    - cron: '5 5 * * *'
+    #每天北京时间 10:00 运行 (对应 UTC 02:00)
+    - cron: '0 2 * * *'
   workflow_dispatch:
 
 jobs:
