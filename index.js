@@ -70,6 +70,16 @@ async function generateSummary(items) {
 
 }
 
+// 用一个标准的 async 函数把它包起来
+async function main() {
+    try {
+        const items = await fetchBuildersData();
+        await generateSummary(items);
+    } catch (error) {
+        console.error("❌ 执行出错:", error);
+        process.exit(1); // 报错时退出
+    }
+}
 
-
-generateSummary(await fetchBuildersData());
+// 运行它
+main();
