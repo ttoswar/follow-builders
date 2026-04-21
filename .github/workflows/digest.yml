@@ -1,0 +1,32 @@
+name: Daily AI Builders Email Digest
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # 每天北京时间上午 8 点
+  workflow_dispatch: # 支持手动触发
+
+jobs:
+  send-digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Script
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: node index.js
+
+      - name: Send Mail
+        uses: dawidd6/action-send-mail@v3
+        with:
+          # 这里以 Gmail 为例，如果是其他邮箱请更换 smtp_server
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }} # 注意：这里填的是“应用专用密码”，不是登录密码
+          subject: "☕ 今日 AI Builder 动态简报"
+          to: ${{ secrets.RECEIVER_EMAIL }}
+          from: "AI Digest Bot"
+          html_body: file://digest.md # 直接读取脚本生成的 Markdown 文件
+          convert_markdown: true # 自动转为 HTML 格式，保证邮件美观
