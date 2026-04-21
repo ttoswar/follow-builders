@@ -43,8 +43,8 @@ async function generateSummary(items) {
 只输出纯 HTML 代码，不要任何 Markdown 标记或废话。
 内容如下：\n${contentText}`;
 
-    // 终极修复：使用最基础、最稳定的 1.5 Flash 端点，去掉了 -latest 后缀
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${GEMINI_API_KEY}`;
     
     const response = await fetch(apiUrl, {
         method: 'POST',
